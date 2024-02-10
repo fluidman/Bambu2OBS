@@ -1,0 +1,5 @@
+pybambu
+requests
+paho-mqtt
+python-dotenv
+python-dateutil

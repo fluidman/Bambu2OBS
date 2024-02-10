@@ -1,0 +1,21 @@
+# Ignore virtual environment
+Bambu2OBS/
+
+# Ignore environment variables
+.env
+
+# Ignore data folder contents
+data/
+
+# Optionally, ignore Python compiled files or other IDE specific files
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+.ipynb_checkpoints
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
