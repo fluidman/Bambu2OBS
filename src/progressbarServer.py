@@ -1,13 +1,20 @@
 from flask import Flask, jsonify
 from flask_cors import CORS  # Import CORS
 import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Retrieve BASE_DIR from environment variables
+BASE_DIR = os.getenv('BASE_DIR', 'data')  # Provide a default value if not found
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
 # Assuming server.py is located at the root and 'assets' is a subdirectory of the root
 # Update the path according to your directory structure if necessary
-PROGRESS_FILE_PATH = os.path.join(os.path.dirname(__file__), 'data', 'progress.txt')
+PROGRESS_FILE_PATH = os.path.join(BASE_DIR, 'progress.txt')
 
 @app.route('/progress')
 def get_progress():
@@ -25,7 +32,7 @@ def get_progress():
                     pass
                 return jsonify({'progress': progress})
         else:
-            return jsonify({'error': 'Progress file not found.'}), 404
+            return jsonify({'progress': "progress.txt not found"})  # Default if no file is found
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

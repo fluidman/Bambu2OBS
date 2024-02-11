@@ -9,9 +9,26 @@ from datetime import datetime, timedelta
 import time
 import socket
 import requests
+import subprocess
+import signal
+import sys
 
 # Load environment variables
 load_dotenv()
+
+subprocesses = []  # List to keep track of subprocesses
+
+def launch_progress_server():
+    """Launches the progress bar server as a separate process."""
+    # Use the current Python interpreter to run progressbarServer.py
+    proc = subprocess.Popen([sys.executable, 'src/progressbarServer.py'])
+    subprocesses.append(proc)
+
+def cleanup_subprocesses():
+    """Terminates all running subprocesses initiated by this script."""
+    for proc in subprocesses:
+        proc.terminate()  # Terminate the subprocess
+        proc.wait()       # Wait for the subprocess to exit
 
 # Define the path for the ConnectionDumps.json file in the data subdirectory
 DUMPS_FILE_PATH = os.path.join('data', 'ConnectionDumps.json')
@@ -292,20 +309,35 @@ def setup_mqtt_listener():
     return client
 
 def main():
+    """
+    Main function to initialize Bambu Cloud connection, start progress bar server,
+    and handle MQTT messages for Bambu 3D printer status updates.
+    """
     print("Initializing Bambu Cloud connection...")
     bambu_cloud = BambuCloud(REGION, EMAIL, PASSWORD)
     bambu_cloud.login()
+    print("Bambu Cloud connection initialized.")
     
-    process_latest_task(bambu_cloud, PRINTER_SN, BASE_DIR)
+    server_proc = launch_progress_server()
+    print("Progress bar server started.")
 
-    print("Connecting to the printer's local MQTT service...")
-    mqtt_client = setup_mqtt_listener()
     try:
+        # Process the latest task from Bambu Cloud, if any
+        process_latest_task(bambu_cloud, PRINTER_SN, BASE_DIR)
+        print("Latest task processed.")
+
+        # Setup and start MQTT listener for real-time printer status updates
+        print("Connecting to the printer's local MQTT service...")
+        mqtt_client = setup_mqtt_listener()
         mqtt_client.loop_forever()
     except KeyboardInterrupt:
         print("Interrupt received, stopping...")
     except Exception as e:
         print(f"Unhandled exception: {e}")
+    finally:
+        stop_progressbar_server(server_proc)
+        print("Progress bar server stopped.")
 
 if __name__ == "__main__":
     main()
+    
