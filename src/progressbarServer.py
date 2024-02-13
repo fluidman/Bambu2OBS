@@ -52,9 +52,9 @@ def get_progress():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/progressbar')
-def serve_progressbar():
-    html_content = f"""
+@app.route('/view/progressbar')
+def progressbar_view():
+    html = """
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -111,7 +111,7 @@ def serve_progressbar():
     </body>
     </html>
     """
-    return render_template_string(html_content)
+    return render_template_string(html)
 
 @app.route('/updates/<filename>')
 def updates(filename):
