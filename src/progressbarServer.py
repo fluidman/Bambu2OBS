@@ -62,42 +62,48 @@ def serve_progressbar():
         <title>Customized Bootstrap Progress Bar for OBS</title>
         <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
         <style>
-            html, body {{
+            html, body {
                 margin: 0;
                 padding: 0;
                 overflow: hidden;
-            }}
-            .progress {{
+            }
+            .custom-container {
+                padding-right: 0;
+                padding-left: 0;
+                margin-right: auto;
+                margin-left: auto;
+                max-width: 560px; /* Set the container's max width */
+            }
+            .progress {
                 background-color: #EEEEEE; /* Color for the unused part of the bar */
-                max-width: 560px; /* Maximum width of the progress bar */
                 height: 30px; /* Height of the progress bar */
                 margin: 0; /* Remove default margin */
-            }}
-            .progress-bar {{
+                width: 100%; /* Use full width of the custom container */
+            }
+            .progress-bar {
                 background-color: #00AE42; /* Color for the used part of the bar */
-            }}
+            }
         </style>
     </head>
     <body>
 
-    <div class="container">
+    <div class="custom-container"> <!-- Changed class here -->
         <div class="progress">
             <div id="progress-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
         </div>
     </div>
 
     <script>
-        function updateProgress() {{
-            fetch('/progress')
+        function updateProgress() {
+            fetch('http://localhost:5000/progress')
                 .then(response => response.json())
-                .then(data => {{
+                .then(data => {
                     const progressBar = document.getElementById('progress-bar');
-                    progressBar.style.width = `${{data.progress}}%`;
+                    progressBar.style.width = `${data.progress}%`;
                     progressBar.setAttribute('aria-valuenow', data.progress);
-                    // progressBar.innerText = `${{data.progress}}%`;
-                }})
+                })
                 .catch(error => console.error('Error fetching progress:', error));
-        }}
+        }
 
         setInterval(updateProgress, 1000);
     </script>
