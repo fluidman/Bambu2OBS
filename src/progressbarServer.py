@@ -1,43 +1,88 @@
-from flask import Flask, jsonify
-from flask_cors import CORS  # Import CORS
+from flask import Flask, jsonify, Response, send_from_directory, render_template_string
+from flask_cors import CORS
 import os
+import time
 from dotenv import load_dotenv
+from threading import Thread
+import datetime
 
 # Load environment variables
 load_dotenv()
 
-# Retrieve BASE_DIR from environment variables
-BASE_DIR = os.getenv('BASE_DIR', 'data')  # Provide a default value if not found
+BASE_DIR = os.getenv('BASE_DIR', 'data')
+SVG_FILES = ['Filaments.svg', 'ActiveFilament.svg']
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
-# Assuming server.py is located at the root and 'assets' is a subdirectory of the root
-# Update the path according to your directory structure if necessary
 PROGRESS_FILE_PATH = os.path.join(BASE_DIR, 'progress.txt')
+SVG_DIR = os.path.join(BASE_DIR)  # Assuming SVG files are stored in the BASE_DIR
+
+def file_watcher(filename, last_known_stamp=0):
+    """
+    Generator function to watch for file changes.
+    """
+    while True:
+        try:
+            stat = os.stat(os.path.join(SVG_DIR, filename))
+            if stat.st_mtime != last_known_stamp:
+                last_known_stamp = stat.st_mtime
+                yield f"data: update\n\n"
+        except FileNotFoundError:
+            pass
+        time.sleep(1)
 
 @app.route('/progress')
 def get_progress():
-    # Try to read the progress value from the file
     try:
-        # Check if the progress file exists
         if os.path.exists(PROGRESS_FILE_PATH):
             with open(PROGRESS_FILE_PATH, 'r') as file:
-                progress = file.read().strip()  # Read and strip any leading/trailing whitespace
-                # Attempt to convert progress to an integer or float as appropriate
+                progress = file.read().strip()
                 try:
                     progress = float(progress) if '.' in progress else int(progress)
                 except ValueError:
-                    # If conversion fails, return the raw string
                     pass
                 return jsonify({'progress': progress})
         else:
-            return jsonify({'progress': "progress.txt not found"})  # Default if no file is found
+            return jsonify({'progress': "progress.txt not found"})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/updates/<filename>')
+def updates(filename):
+    if filename in SVG_FILES:
+        return Response(file_watcher(filename), content_type='text/event-stream')
+    return "File not found", 404
+
+@app.route('/svg/<filename>')
+def serve_svg(filename):
+    return send_from_directory(os.path.join(BASE_DIR), filename)
+
+@app.route('/view/<filename>')
+def view_svg(filename):
+    if filename in SVG_FILES:
+        html = f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>SVG Viewer - {filename}</title>
+        </head>
+        <body>
+            <img src="/svg/{filename}" id="svgImage">
+            <script>
+                const evtSource = new EventSource("/updates/{filename}");
+                evtSource.onmessage = function(event) {{
+                    const img = document.getElementById('svgImage');
+                    const src = img.src.split('?')[0];
+                    img.src = `${{src}}?t=${{new Date().getTime()}}`;
+                }};
+            </script>
+        </body>
+        </html>
+        """
+        return render_template_string(html)
+    return "File not found", 404
+
 if __name__ == '__main__':
-    # Run the Flask app
-    # You can specify host='0.0.0.0' if you want your server to be reachable externally
-    # Be cautious about security implications of making your server externally accessible
     app.run(debug=True, port=5000)

@@ -12,6 +12,7 @@ import requests
 import subprocess
 import signal
 import sys
+import xml.etree.ElementTree as ET
 
 # Load environment variables
 load_dotenv()
@@ -141,7 +142,95 @@ def load_from_file(file_name, default=None):
     except FileNotFoundError:
         return default
 
+def hex_to_rgb_percent(hex_color):
+    """Convert hex color to an RGB percentage string."""
+    hex_color = hex_color.lstrip('#')
+    r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    return f"rgb({r/255*100}%,{g/255*100}%,{b/255*100}%)"
 
+# Helper function to read filament color from file
+def read_filament_color_from_file(tray_idx):
+    color_file_path = os.path.join(BASE_DIR, f'ams{tray_idx}FilamentColor.txt')
+    try:
+        with open(color_file_path, 'r') as file:
+            return file.read().strip()
+    except FileNotFoundError:
+        print(f"File {color_file_path} not found.")
+        return None
+
+# Helper function to read active ams tray from file
+def read_active_ams_tray_from_file():
+    amstray_file_path = os.path.join(BASE_DIR, f'activeAmsTray.txt')
+    try:
+        with open(amstray_file_path, 'r') as file:
+            return file.read().strip()
+    except FileNotFoundError:
+        print(f"File {amstray_file_path} not found.")
+        return None
+    
+# Function to update the SVG with colors for all trays
+def update_svg_with_all_tray_colors():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    input_svg_path = os.path.join(script_dir, "templates", "Filaments.svg")
+    active_input_svg_path = os.path.join(script_dir, "templates", "ActiveFilament.svg")
+    output_svg_path = os.path.join(script_dir, os.pardir, "data", "Filaments.svg")
+    active_output_svg_path = os.path.join(script_dir, os.pardir, "data", "ActiveFilament.svg")
+    
+    tree = ET.parse(input_svg_path)
+    active_tree = ET.parse(active_input_svg_path)
+    root = tree.getroot()
+    active_root = active_tree.getroot()
+    namespaces = {'svg': 'http://www.w3.org/2000/svg'}
+    ET.register_namespace('', 'http://www.w3.org/2000/svg')
+    
+    # Correctly read the active tray value from file
+    active_ams_tray = int(read_active_ams_tray_from_file())
+    
+    for tray_idx in range(1, 5):
+        filament_color = read_filament_color_from_file(tray_idx)
+        rgb_color = hex_to_rgb_percent(filament_color) if filament_color and filament_color != 'N/A' else None
+        
+        if rgb_color:
+            # Update Filaments.svg
+            element_id = f'Color{tray_idx}'
+            element = root.find(f".//*[@id='{element_id}']", namespaces)
+            if element is not None:
+                element.set('fill', rgb_color)
+            
+            # Update ActiveFilament.svg for lines
+            for line_part in ['a', 'b', 'c']:
+                line_id = f'Line{tray_idx}{line_part}'
+                line_element = active_root.find(f".//*[@id='{line_id}']", namespaces)
+                if line_element is not None:
+                    line_element.set('fill', rgb_color)
+                    # Set opacity based on active tray
+                    line_element.set('opacity', '0' if tray_idx != active_ams_tray else '1')
+
+        # Set active filament tray by highlighting the corrected numbered circle
+        circle_element_id = f'Circle{tray_idx}'
+        circle_element = root.find(f".//*[@id='{circle_element_id}']", namespaces)
+        if circle_element is not None:
+            if tray_idx == active_ams_tray:
+                circle_element.set('fill', 'green')  # Active tray
+            else:
+                circle_element.set('fill', 'gray')  # Inactive trays
+
+    # Update ActiveFilament.svg for Extruder color
+    if active_ams_tray:
+        active_tray_color = read_filament_color_from_file(active_ams_tray)
+        active_rgb_color = hex_to_rgb_percent(active_tray_color) if active_tray_color and active_tray_color != 'N/A' else None
+        if active_rgb_color:
+            color_element = active_root.find(".//*[@id='Extruder']/*[@id='Color']", namespaces)
+            if color_element is not None:
+                color_element.set('fill', active_rgb_color)
+                color_element.set('opacity', '1')  # Ensure the active tray color is fully opaque
+    
+    # Save the modified SVGs
+    tree.write(output_svg_path, xml_declaration=True, encoding='utf-8')
+    active_tree.write(active_output_svg_path, xml_declaration=True, encoding='utf-8')
+    print(f"Modified SVG saved as {output_svg_path}")
+    print(f"Modified ActiveFilament SVG saved as {active_output_svg_path}")
+    
 # Load the persisted total_layer_num at script startup
 total_layer_num_global = load_from_file("total_layer_num", None)
 
@@ -199,22 +288,27 @@ def handle_print_data(print_data):
         write_to_file('coolingFanSpeed', f"{calculated_speed:.2f}")
 
     # Process print speed level
-    if 'spd_lvl' in print_data:
-        spd_lvl_key = str(print_data['spd_lvl'])  # Ensure it's a string
-        speed_level_name = SPEED_PROFILE.get(spd_lvl_key, "Unknown Speed Level")
+    if "spd_lvl" in print_data:
+        print(f"Received spd_lvl: {print_data['spd_lvl']}")
+        print(f"SPEED_PROFILE keys: {list(SPEED_PROFILE.keys())}")
+
+        spd_lvl_value = int(print_data["spd_lvl"])  # Convert spd_lvl to integer
+        speed_level_name = SPEED_PROFILE.get(spd_lvl_value, "Unknown Speed Level")
+
+        # Ensure the first letter is uppercase without altering the case of the rest of the string
+        speed_level_name = speed_level_name[0].upper() + speed_level_name[1:]
+
+        print(f"Matched speed level name: {speed_level_name}")  # Debug print
         write_to_file('printSpeed', speed_level_name)
 
-    # Assuming mc_print_stage and mc_print_sub_stage need to be strings
-    if 'mc_print_stage' in print_data:
+    if "mc_print_stage" in print_data:
+        print(f"Received mc_print_stage: {print_data['mc_print_stage']}")
+        print(f"CURRENT_STAGE_IDS keys: {list(CURRENT_STAGE_IDS.keys())}")
+
         mc_print_stage_key = str(print_data['mc_print_stage'])
         mc_print_stage_name = CURRENT_STAGE_IDS.get(mc_print_stage_key, "Unknown Print Stage")
+        print(f"Matched print stage name: {mc_print_stage_name}")  # Debug print
         write_to_file('printStage', mc_print_stage_name)
-    
-    if 'mc_print_sub_stage' in print_data:
-        mc_print_sub_stage_key = str(print_data['mc_print_sub_stage'])
-        mc_print_sub_stage_name = CURRENT_STAGE_IDS.get(mc_print_sub_stage_key, "Unknown Print Sub Stage")
-        write_to_file('printSubStage', mc_print_sub_stage_name)
-
         
     # Process layer number
     if "layer_num" in print_data:
@@ -248,6 +342,7 @@ def handle_print_data(print_data):
     if 'ams' in print_data and 'tray_now' in print_data['ams']:
         active_tray = int(print_data['ams']['tray_now']) + 1  # Adjusting from 0-based to 1-based indexing
         write_to_file('activeAmsTray', str(active_tray))
+        update_svg_with_all_tray_colors()
 
 def process_latest_task(bambu_cloud, printer_sn, base_dir):
     latest_task = bambu_cloud.get_latest_task_for_printer(printer_sn)
