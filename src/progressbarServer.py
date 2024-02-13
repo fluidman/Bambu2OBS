@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, Response, send_from_directory, render_template_string
+from werkzeug.utils import secure_filename, safe_join
 from flask_cors import CORS
 import os
 import time
@@ -56,8 +57,16 @@ def updates(filename):
 
 @app.route('/svg/<filename>')
 def serve_svg(filename):
-    return send_from_directory(os.path.join(BASE_DIR), filename)
-
+    filename = secure_filename(filename)
+    filepath = safe_join(SVG_DIR, filename)
+    print(f"Attempting to serve: {filepath}")  # Debug print
+    if os.path.exists(filepath):
+        print("File found, serving...")  # Debug print
+        return send_from_directory(SVG_DIR, filename)
+    else:
+        app.logger.error(f"File not found: {filepath}")
+        return "File not found", 404
+    
 @app.route('/view/<filename>')
 def view_svg(filename):
     if filename in SVG_FILES:
