@@ -3,21 +3,24 @@ from werkzeug.utils import secure_filename, safe_join
 from flask_cors import CORS
 import os
 import time
+import logging
 from dotenv import load_dotenv
 from threading import Thread
-import datetime
 
 # Load environment variables
 load_dotenv()
 
-BASE_DIR = os.getenv('BASE_DIR', 'data')
+BASE_DIR = os.path.abspath(os.getenv('BASE_DIR', 'data'))
 SVG_FILES = ['Filaments.svg', 'ActiveFilament.svg']
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
+# Configure logging
+app.logger.setLevel(logging.DEBUG)
+
 PROGRESS_FILE_PATH = os.path.join(BASE_DIR, 'progress.txt')
-SVG_DIR = os.path.join(BASE_DIR)  # Assuming SVG files are stored in the BASE_DIR
+SVG_DIR = BASE_DIR  # Assuming SVG files are stored in the BASE_DIR
 
 def file_watcher(filename, last_known_stamp=0):
     """
@@ -59,12 +62,12 @@ def updates(filename):
 def serve_svg(filename):
     filename = secure_filename(filename)
     filepath = safe_join(SVG_DIR, filename)
-    print(f"Attempting to serve: {filepath}")  # Debug print
+    print(f"Attempting to serve: {filepath}: {secure_filename} in directory: {SVG_DIR}")  # Debug print
     if os.path.exists(filepath):
         print("File found, serving...")  # Debug print
         return send_from_directory(SVG_DIR, filename)
     else:
-        app.logger.error(f"File not found: {filepath}")
+        app.logger.error(f"File not found: {secure_filename} in directory: {SVG_DIR}")
         return "File not found", 404
     
 @app.route('/view/<filename>')
