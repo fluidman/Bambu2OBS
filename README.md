@@ -68,7 +68,19 @@ Copy .env.example to .env and adjust the configuration parameters according to y
     ```
 
 2. Configure OBS Studio to display the progress bar and SVGs by adding browser sources pointing to the Flask server's URLs.
-(I will share a OBS Scene dump shortly that you can import to your OWB instance)
+
+### Importing the OBS Scene
+
+To make it easier to set up Bambu2OBS in OBS Studio, you can import the pre-configured OBS scene:
+
+1. Download the scene file from the `obs_templates/Bambu2OBS_Scene.json` in this repository.
+2. Open OBS Studio.
+3. Go to **Scene Collection > Import** and select the downloaded `.json` file.
+4. Adjust any necessary settings (e.g., URLs or local paths) within the imported scene to match your setup, especially pointing to the Flask server’s URL for live data.
+
+This imported scene provides an easy way to visualize your print progress in OBS with minimal setup.
+
+![Bambu2OBS OBS Scene Example](images/obs_scene_example.png)
 
 ### Attribution
 This project is open-source under the MIT License. If you use or adapt Bambu2OBS, please provide credit to [fluidman](https://github.com/fluidman) and reference this repository.
