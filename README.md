@@ -62,6 +62,16 @@ pip install -r requirements.txt
 
 ### Configuration
 Copy .env.example to .env and adjust the configuration parameters according to your environment and Bambu 3D printer settings.
+### Configuration
+In order to connect to your Bambu printer, set the following environment variables in the `.env.example` file and rename it to`.env`:
+
+- **EMAIL**: Your Bambu Cloud account email.
+- **PASSWORD**: Your Bambu Cloud account password.
+- **REGION**: Set to "China" if using the Chinese Bambu Cloud; otherwise, set to "global".
+- **PRINTER_SN**: The serial number of your Bambu Lab printer.
+- **PRINTER_IP**: The IP address of your printer on your local network.
+- **ACCESS_CODE**: Access code from your printer settings.
+- **BASE_DIR**: name of the folder that will store the print job data used for the overlays.
 
 ### Running the Application
 1. Start the Flask server:
