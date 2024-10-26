@@ -17,6 +17,9 @@ import xml.etree.ElementTree as ET
 # Load environment variables
 load_dotenv()
 
+# Additional global variable to track the first run
+is_first_run = True
+
 subprocesses = []  # List to keep track of subprocesses
 
 def launch_progress_server():
@@ -52,52 +55,83 @@ class BambuCloud:
         self.email = email
         self.password = password
         self.auth_token = None
+        self.session = requests.Session()  # Use a session for persistent connections
 
     def _get_authentication_token(self):
+        """Authenticate and retrieve access token from Bambu Cloud with session handling and headers."""
         print("Getting accessToken from Bambu Cloud")
-        base_url = 'https://api.bambulab.com/v1/user-service/user/login' if self.region != "China" else 'https://api.bambulab.cn/v1/user-service/user/login'
-        data = {'account': self.email, 'password': self.password}
-        response = requests.post(base_url, json=data, timeout=10)
+        
+        base_url = (
+            'https://api.bambulab.com/v1/user-service/user/login'
+            if self.region != "China" 
+            else 'https://api.bambulab.cn/v1/user-service/user/login'
+        )
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.121 Safari/537.36"
+        }
+        payload = {
+            "account": self.email,
+            "password": self.password
+        }
+        
+        response = self.session.post(base_url, headers=headers, json=payload, timeout=10)
         if response.ok:
-            self.auth_token = response.json()['accessToken']
+            self.auth_token = response.json().get('accessToken')
             print("Authentication successful")
         else:
-            raise ValueError(f"Authentication failed with status code {response.status_code}")
+            raise ValueError(f"Authentication failed with status code {response.status_code}: {response.text}")
 
     def login(self):
+        """Public method to initiate login and set auth_token."""
         self._get_authentication_token()
 
     def get_device_list(self):
+        """Retrieve list of devices associated with account."""
         if not self.auth_token:
             raise ValueError("Not authenticated")
+        
         print("Getting device list from Bambu Cloud")
-        base_url = 'https://api.bambulab.com/v1/iot-service/api/user/bind' if self.region != "China" else 'https://api.bambulab.cn/v1/iot-service/api/user/bind'
+        base_url = (
+            'https://api.bambulab.com/v1/iot-service/api/user/bind'
+            if self.region != "China" 
+            else 'https://api.bambulab.cn/v1/iot-service/api/user/bind'
+        )
         headers = {'Authorization': f'Bearer {self.auth_token}'}
-        response = requests.get(base_url, headers=headers, timeout=10)
+        
+        response = self.session.get(base_url, headers=headers, timeout=10)
         if response.ok:
-            devices = response.json()['devices']
+            devices = response.json().get('devices', [])
             return devices
         else:
             raise ValueError(f"Failed to fetch device list with status code {response.status_code}")
 
-    def get_tasklist(self):
-        print("Fetching task list from Bambu Cloud")
-        base_url = 'https://api.bambulab.com/v1/user-service/my/tasks' if self.region != "China" else 'https://api.bambulab.cn/v1/user-service/my/tasks'
-        headers = {'Authorization': f'Bearer {self.auth_token}'}
-        response = requests.get(base_url, headers=headers, timeout=10)
-        if response.ok:
-            return response.json()
-        else:
-            raise ValueError(f"Failed to fetch task list with status code {response.status_code}")
-
     def get_latest_task_for_printer(self, deviceId: str):
-        print(f"Fetching latest task for printer with dev_id: {deviceId}")
+        """Fetches the latest task for a specific printer by device ID."""
+        print(f"Fetching latest task for printer with device ID: {deviceId}")
         tasklist = self.get_tasklist()
+        
         if 'hits' in tasklist:
             for task in tasklist['hits']:
                 if task['deviceId'] == deviceId:
                     return task
         return None
+
+    def get_tasklist(self):
+        """Fetches the task list from Bambu Cloud."""
+        print("Fetching task list from Bambu Cloud")
+        base_url = (
+            'https://api.bambulab.com/v1/user-service/my/tasks'
+            if self.region != "China"
+            else 'https://api.bambulab.cn/v1/user-service/my/tasks'
+        )
+        headers = {'Authorization': f'Bearer {self.auth_token}'}
+        
+        response = self.session.get(base_url, headers=headers, timeout=10)
+        if response.ok:
+            return response.json()
+        else:
+            raise ValueError(f"Failed to fetch task list with status code {response.status_code}")
+
         
 if not os.path.exists(BASE_DIR):
     os.makedirs(BASE_DIR, exist_ok=True)
@@ -215,8 +249,8 @@ def update_svg_with_all_tray_colors():
             else:
                 circle_element.set('fill', 'gray')  # Inactive trays
 
-    # Update ActiveFilament.svg for Extruder color
-    if active_ams_tray:
+    # Check if the active tray is within the expected range (1-4)
+    if 1 <= active_ams_tray <= 4:
         active_tray_color = read_filament_color_from_file(active_ams_tray)
         active_rgb_color = hex_to_rgb_percent(active_tray_color) if active_tray_color and active_tray_color != 'N/A' else None
         if active_rgb_color:
@@ -224,7 +258,13 @@ def update_svg_with_all_tray_colors():
             if color_element is not None:
                 color_element.set('fill', active_rgb_color)
                 color_element.set('opacity', '1')  # Ensure the active tray color is fully opaque
-    
+    else:
+        # If active_ams_tray is outside the expected range, make the extruder color transparent
+        color_element = active_root.find(".//*[@id='Extruder']/*[@id='Color']", namespaces)
+        if color_element is not None:
+            color_element.set('opacity', '0')  # Make the extruder color transparent if no valid tray is active
+
+
     # Save the modified SVGs
     tree.write(output_svg_path, xml_declaration=True, encoding='utf-8')
     active_tree.write(active_output_svg_path, xml_declaration=True, encoding='utf-8')
@@ -238,8 +278,10 @@ def on_connect(client, userdata, flags, rc):
     print(f"Connected with result code {rc}")
     client.subscribe(f"device/{PRINTER_SN}/report")
 
+previous_task_id = None  # Global variable to store the ID of the last known print task
+
 def on_message(client, userdata, msg):
-    global total_layer_num_global
+    global total_layer_num_global, previous_task_id
     print(" ")
     print(f"Message received -> Topic: {msg.topic} Message: {msg.payload.decode('utf-8')}")
     try:
@@ -254,8 +296,19 @@ def on_message(client, userdata, msg):
 
         if 'print' in message_data_str:
             handle_print_data(message_data_str['print'])
+
+            # Check if a new print job is detected
+            current_task_id = message_data_str['print'].get('task_id')  # Assume the message contains a task ID
+            if current_task_id and current_task_id != previous_task_id:
+                print("New print job detected. Rerunning Bambu Cloud connection for the latest task.")
+                previous_task_id = current_task_id  # Update the last known task ID
+                # Reconnect to Bambu Cloud to fetch the latest task information
+                bambu_cloud = BambuCloud(REGION, EMAIL, PASSWORD)
+                bambu_cloud.login()
+                process_latest_task(bambu_cloud, PRINTER_SN, BASE_DIR)
     except Exception as e:
         print(f"Error processing message: {e}")
+
 
 def convert_all_to_str(data):
     """Recursively convert all values in the dictionary to strings."""
@@ -344,7 +397,15 @@ def handle_print_data(print_data):
         write_to_file('activeAmsTray', str(active_tray))
         update_svg_with_all_tray_colors()
 
-def process_latest_task(bambu_cloud, printer_sn, base_dir):
+def format_time_hms(seconds):
+    """Formats time from seconds to 'HhMmSs'."""
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours}h {minutes}m {seconds}s"
+
+
+def process_latest_task(bambu_cloud, printer_sn, base_dir, force_update=False):
+    global is_first_run
     latest_task = bambu_cloud.get_latest_task_for_printer(printer_sn)
     task_id_file_path = os.path.join(base_dir, 'latest_task_id.txt')
 
@@ -357,41 +418,43 @@ def process_latest_task(bambu_cloud, printer_sn, base_dir):
 
     current_task_id = str(latest_task.get('id'))
 
-    # Check if the latest task is already processed
-    if current_task_id == last_processed_task_id:
-        print("Latest task already processed. No action taken.")
-        return
+    # Check if this is a forced update or if the task info has changed
+    if force_update or current_task_id != last_processed_task_id:
+        # Extract and write required information from the task
+        designTitle = latest_task.get('designTitle', 'N/A')
+        printProfile = latest_task.get('title', 'N/A')
+        printCover = latest_task.get('cover', 'N/A')
+        totalWeight = str(latest_task.get('weight', 'N/A')) + "g"
+        totalTime = int(latest_task.get('costTime', 0))
+        totalTimeFormatted = format_time_hms(totalTime)  # Use the new format function
 
-    # Extract required information from the task
-    designTitle = latest_task.get('designTitle', 'N/A')
-    printProfile = latest_task.get('title', 'N/A')
-    printCover = latest_task.get('cover', 'N/A')
-    totalWeight = str(latest_task.get('weight', 'N/A'))
-    totalTime = int(latest_task.get('costTime', 0))
+        # Write extracted information to files
+        write_to_file('designTitle', designTitle)
+        write_to_file('printProfile', printProfile)
+        write_to_file('printCover', printCover)
+        write_to_file('totalWeight', totalWeight)
+        write_to_file('totalTime', totalTimeFormatted)
 
-    # Convert totalTime to HH:MM:SS format
-    totalTimeFormatted = str(timedelta(seconds=totalTime))
+        # Download and save print cover image if available
+        if printCover != 'N/A':
+            cover_response = requests.get(printCover)
+            cover_path = os.path.join(base_dir, 'printCover.png')
+            with open(cover_path, 'wb') as cover_file:
+                cover_file.write(cover_response.content)
+            print(f"Downloaded print cover to {cover_path}")
 
-    # Use the existing function to write extracted information to files
-    write_to_file('designTitle', designTitle)
-    write_to_file('printProfile', printProfile)
-    write_to_file('printCover', printCover)
-    write_to_file('totalWeight', totalWeight)
-    write_to_file('totalTime', totalTimeFormatted)
+        # Update the last processed task ID
+        with open(task_id_file_path, 'w') as file:
+            file.write(current_task_id)
 
-    # Download printCover if it has a valid URL
-    if printCover != 'N/A':
-        cover_response = requests.get(printCover)
-        cover_path = os.path.join(base_dir, 'printCover.png')
-        with open(cover_path, 'wb') as cover_file:
-            cover_file.write(cover_response.content)
-        print(f"Downloaded print cover to {cover_path}")
+        print("Latest task processed successfully.")
+    elif not force_update and current_task_id == last_processed_task_id:
+        print("No new task or already processed. Skipping update.")
 
-    # Update the last processed task ID
-    with open(task_id_file_path, 'w') as file:
-        file.write(current_task_id)
+    # After processing, disable force_update for subsequent runs
+    if is_first_run:
+        is_first_run = False
 
-    print("Latest task processed successfully.")
 
 def setup_mqtt_listener():
     client = mqtt.Client()
@@ -413,6 +476,9 @@ def main():
     bambu_cloud.login()
     print("Bambu Cloud connection initialized.")
     
+    # Process the latest task from Bambu Cloud, forcing update on the first run
+    process_latest_task(bambu_cloud, PRINTER_SN, BASE_DIR, force_update=is_first_run)
+
     server_proc = launch_progress_server()
     print("Progress bar server started.")
 
