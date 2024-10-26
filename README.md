@@ -1,6 +1,14 @@
 # Bambu2OBS
 
-This project aims to integrate Bambu 3D printers with OBS Studio, allowing real-time monitoring and display of printing progress within OBS. It leverages the `pybambu` library for interfacing with Bambu 3D printers and Flask for serving dynamic content.
+## Overview
+Bambu2OBS is a tool that connects your Bambu Lab 3D printer to OBS Studio, allowing you to monitor and display real-time print progress directly in OBS. Ideal for content creators who want to showcase live 3D printing projects or create timelapses with accurate status updates.
+
+This project integrates Bambu 3D printers with OBS Studio, offering real-time monitoring and display of printing progress. It uses the `pybambu` library for interfacing with Bambu 3D printers and Flask for serving dynamic content.
+
+### Features
+- Real-time status updates on printing progress
+- SVG integration for visualizing print data
+- Configurable through environment variables for easy setup
 
 ## Setup and Installation
 
