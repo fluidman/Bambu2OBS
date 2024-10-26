@@ -102,3 +102,6 @@ Special thanks to Greg Hesp for the `pybambu` library, which facilitates communi
 
 ### License
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## About
+Bambu2OBS is designed for OBS Studio users who want to display live updates from Bambu Lab 3D printers. This tool supports most Bambu printer models and works best with OBS Studio and Flask, providing a flexible solution for showcasing real-time print progress in streaming setups.
