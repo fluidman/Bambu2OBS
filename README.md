@@ -70,5 +70,10 @@ Copy .env.example to .env and adjust the configuration parameters according to y
 2. Configure OBS Studio to display the progress bar and SVGs by adding browser sources pointing to the Flask server's URLs.
 (I will share a OBS Scene dump shortly that you can import to your OWB instance)
 
-### Credits
-Greg Hesp for the pybambu library, which facilitates communication with Bambu 3D printers. GitHub repository: pybambu
+### Attribution
+This project is open-source under the MIT License. If you use or adapt Bambu2OBS, please provide credit to [fluidman](https://github.com/fluidman) and reference this repository.
+
+Special thanks to Greg Hesp for the `pybambu` library, which facilitates communication with Bambu 3D printers. GitHub repository: [pybambu](https://github.com/greghesp/pybambu).
+
+### License
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
